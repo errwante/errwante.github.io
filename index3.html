@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Place Autocomplete</title>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <style>
+      /* Always set the map height explicitly to define the size of the div
+       * element that contains the map. */
+      #map {
+        height: 100%;
+      }
+      /* Optional: Makes the sample page fill the window. */
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      .controls {
+        margin-top: 10px;
+        border: 1px solid transparent;
+        border-radius: 2px 0 0 2px;
+        box-sizing: border-box;
+        -moz-box-sizing: border-box;
+        height: 32px;
+        outline: none;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      }
+
+      #origin-input,
+      #destination-input {
+        background-color: #fff;
+        font-family: Roboto;
+        font-size: 15px;
+        font-weight: 300;
+        margin-left: 12px;
+        padding: 0 11px 0 13px;
+        text-overflow: ellipsis;
+        width: 200px;
+      }
+
+      #origin-input:focus,
+      #destination-input:focus {
+        border-color: #4d90fe;
+      }
+
+      #mode-selector {
+        color: #fff;
+        background-color: #4d90fe;
+        margin-left: 12px;
+        padding: 5px 11px 0px 11px;
+      }
+
+      #mode-selector label {
+        font-family: Roboto;
+        font-size: 13px;
+        font-weight: 300;
+      }
+
+    </style>
+  </head>
+  <body>
+    <div id="distance"></div>
+    <div id="destinations">
+    <input type="button" id="more_fields" class=controls value="New" />
+    
+    <input id="origin-input" class="controls" type="text"
+        placeholder="Enter an origin location" value="Brno, Chechia">
+
+    <input id="destination-input" class="controls" type="text"
+        placeholder="Enter a destination location" value="Prague, Czechia">
+    </div>
+    <div id="mode-selector" class="controls">
+      <input type="radio" name="type" id="changemode-walking">
+      <label for="changemode-walking">Walking</label>
+
+    
+
+      <input type="radio" name="type" id="changemode-driving" checked= "checked">
+      <label for="changemode-driving">Driving</label>
+      
+    </div>
+    <form id="optim">
+    <input type="checkbox" id="optimize" class=controls value="Optimize">Optimize<br>
+    </form>
+    <div id="map"></div>
+
+    <script>
+      // This example requires the Places library. Include the libraries=places
+      // parameter when you first load the API. For example:
+      // <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places">
+
+      function initMap() {
+        var map = new google.maps.Map(document.getElementById('map'), {
+          mapTypeControl: false,
+          center: {lat: -33.8688, lng: 151.2195},
+          zoom: 13
+        });
+
+        new AutocompleteDirectionsHandler(map);
+      }
+
+       /**
+        * @constructor
+       */
+      function AutocompleteDirectionsHandler(map) {
+        this.map = map;
+        this.originPlaceId = null;
+        this.destinationPlaceId = null;
+        this.travelMode = 'DRIVING';
+        this.opt = false;
+        this.NdestAuto = [];
+        this.i = 0;
+        
+        //w = ['Zurich','Munich','Wien','Nurnberg'];
+        this.waypts = [];
+        /*
+        for(var i = 0; i < w.length; i++){
+          this.waypts.push({
+            location: w[i],
+            stopover: true
+          })
+        }
+        */
+        var butn = document.getElementById('more_fields');
+        var optimbutn = document.getElementById('optim');
+        var originInput = document.getElementById('origin-input');
+        var destinationInput = document.getElementById('destination-input');
+        var modeSelector = document.getElementById('mode-selector');
+        //var ndestination = document.getElementById('ndestination');
+        
+        
+        this.directionsService = new google.maps.DirectionsService;
+        this.directionsDisplay = new google.maps.DirectionsRenderer;
+        this.directionsDisplay.setMap(map);
+
+        var originAutocomplete = new google.maps.places.Autocomplete(
+            originInput, {placeIdOnly: true});
+        var destinationAutocomplete = new google.maps.places.Autocomplete(
+            destinationInput, {placeIdOnly: true});
+        //var newdestAuto = new google.maps.places.Autocomplete(ndestination, {placeIdOnly:true});
+        
+
+        this.setupClickListener('changemode-walking', 'WALKING');
+        //this.setupClickListener('changemode-transit', 'TRANSIT');
+        this.setupClickListener('changemode-driving', 'DRIVING');
+
+        this.setupPlaceChangedListener(originAutocomplete, 'ORIG');
+        this.setupPlaceChangedListener(destinationAutocomplete, 'DEST');
+        //this.setupPlaceChangedListener(newdestAuto, 'WAYP');
+        this.setupOptimListener();
+        
+        this.setupNewDestListener('more_fields');
+        
+        this.map.controls[google.maps.ControlPosition.TOP_LEFT].push(originInput);
+        this.map.controls[google.maps.ControlPosition.LEFT_TOP].push(destinationInput);
+        this.map.controls[google.maps.ControlPosition.TOP_LEFT].push(modeSelector);
+        //this.map.controls[google.maps.ControlPosition.TOP_RIGHT].push(ndestination);
+        this.map.controls[google.maps.ControlPosition.TOP_LEFT].push
+          (butn);
+        this.map.controls[google.maps.ControlPosition.TOP_LEFT].push(optimbutn);
+        
+      }
+
+      // Sets a listener on a radio button to change the filter type on Places
+      // Autocomplete.
+      AutocompleteDirectionsHandler.prototype.setupClickListener = function(id, mode) {
+        var radioButton = document.getElementById(id);
+        var me = this;
+        radioButton.addEventListener('click', function() {
+          
+          me.travelMode = mode;
+          me.route();
+        });
+      };
+      AutocompleteDirectionsHandler.prototype.setupOptimListener = function() {
+        var CheckBox = document.getElementById('optimize');
+        var me = this;
+        
+        CheckBox.addEventListener('click', function() {
+          if(CheckBox.checked === true) {
+          //me.map.controls[google.maps.ControlPosition.RIGHT_TOP].removeAt(2);
+          me.opt = true;
+          me.route();
+          }
+          else {
+            me.opt = false;
+            me.route();
+          }
+        });
+      }
+
+      AutocompleteDirectionsHandler.prototype.setupPlaceChangedListener = function(autocomplete, mode) {
+        var me = this;
+        autocomplete.bindTo('bounds', this.map);
+        autocomplete.addListener('place_changed', function() {
+          var place = autocomplete.getPlace();
+          if (!place.place_id) {
+            window.alert("Please select an option from the dropdown list.");
+            return;
+          }
+          if (mode === 'ORIG') {
+            me.originPlaceId = place.place_id;
+          } 
+          else if(mode ==='WAYP') {
+            me.waypts.push({
+              location: place.name,
+              stopover: true
+            })
+          }
+          else {
+            me.destinationPlaceId = place.place_id;
+          }
+          me.route();
+        });
+
+      };
+      
+      AutocompleteDirectionsHandler.prototype.setupWayptChangedListener = function(autocomplete, id) {
+        var me = this;
+        autocomplete.bindTo('bounds', this.map);
+        autocomplete.addListener('place_changed', function() {
+          var place = autocomplete.getPlace();
+          if (!place.place_id) {
+            window.alert("Please select an option from the dropdown list.");
+            return;
+          }
+          if(me.waypts.length == 0) {
+              me.waypts.push({
+                location: place.name,
+                id: id
+              });
+          }
+          
+          var flag = true;
+          for (var i = 0; i < me.waypts.length; i++) {
+           
+            if(me.waypts[i].id == id) {
+            me.waypts[i].location = place.name;
+            flag = false;
+            break;
+            }
+          }
+          if(flag) {
+          me.waypts.push({
+              location: place.name,
+              id: id
+            });
+          }
+          me.route();
+          
+        });
+        
+      };
+
+      AutocompleteDirectionsHandler.prototype.route = function() {
+        if (!this.originPlaceId || !this.destinationPlaceId) {
+          return;
+        }
+        var me = this;
+        var wayp = [];
+        
+        for(var i = 0; i < me.waypts.length; i++) {
+          wayp.push({
+            location: me.waypts[i].location,
+            stopover: true
+          });
+        }
+        
+        this.directionsService.route({
+          origin: {'placeId': this.originPlaceId},
+          destination: {'placeId': this.destinationPlaceId},
+          travelMode: this.travelMode,
+          waypoints: wayp,
+          optimizeWaypoints: this.opt
+        }, function(response, status) {
+          if (status === 'OK') {
+            me.directionsDisplay.setDirections(response);
+            var route = response.routes[0];
+            var distance = 0;
+            var duration = 0;
+            for (var i = 0; i < route.legs.length; i++){
+              distance += route.legs[i].distance.value;
+              duration += route.legs[i].duration.value;
+              
+            }
+            distance = Math.ceil(distance/1000)*0.62;
+            durationh = Math.floor(duration/3600);
+            durationm = Math.ceil((duration % 3600)/60) ;
+            duration = "" + durationh + "h " + durationm + " min"; 
+            dist = document.getElementById('distance');
+            //dist.innerHTML = distance;
+            //alert(distance);
+          } else {
+            window.alert('Directions request failed due to ' + status);
+          }
+        });
+      };
+      AutocompleteDirectionsHandler.prototype.setupNewDestListener = function(id) {
+        //room++;
+        var me = this;
+        var NewButton = document.getElementById(id);
+        NewButton.addEventListener('click', function() {
+          //document.getElementById("ndestination").style.display = 'block';
+          var objTo = document.getElementById('destinations');
+          var elem = document.querySelectorAll('[id^="waypt"]');
+          //objTo.style.display = 'block';
+          var divtest = document.createElement('div');
+          
+          //var str = '<input id="destinat%s" type="text" placeholder="Enter destination">';
+          //divtest.index=1;
+          //str = str.replace('%s',room)
+          //var i = elem.length;
+          var id = (new Date()).getTime();
+          divtest.innerHTML = '<input type="text" class="controls" placeholder="Enter destination"/>';
+          divtest.setAttribute("id", "waypt" + id);
+          //divtest.setAttribute("id", "destinat" + objTo.children.length);
+          //divtest.index = 1;
+          var SpanDelete = document.createElement('span');
+          SpanDelete.innerHTML =  "&nbsp;&#10007;&nbsp;";
+          SpanDelete.setAttribute("id", id);
+          SpanDelete.setAttribute("class", "delete");
+          //SpanDelete.onclick = deleteItem;
+          divtest.appendChild(SpanDelete);
+          objTo.appendChild(divtest);
+          //NdestAuto = [];
+          SpanDelete.addEventListener('click', function() {
+            
+            //alert(divtest.index);
+            var nspans = me.waypts.length;
+            
+            for (var i = 0; i < me.waypts.length; i++) {
+            
+              if(me.waypts[i].id == SpanDelete.id){
+                me.waypts.splice(i,1);
+                break;
+              }
+              
+            }
+            //fix this
+            for (var i = 0; i < nspans+1; i++){
+              var loccontrol = me.map.controls[google.maps.ControlPosition.LEFT_CENTER].getAt(i);
+              //console.log(loccontrol);
+              if ((loccontrol.getElementsByClassName("delete")[0].id)==SpanDelete.id){
+                  me.map.controls[google.maps.ControlPosition.LEFT_CENTER].removeAt(i);
+                  break;
+                }
+              
+            }
+            me.route();
+          })
+          var newdest = document.getElementById('waypt'+ id);
+          
+          me.NdestAuto.push({
+            auto: new google.maps.places.Autocomplete(newdest.children[0], {placeIdOnly: true}),
+            id: id
+            }
+            );
+          me.map.controls[google.maps.ControlPosition.LEFT_CENTER].push(newdest);
+          //document.getElementById('destinat').style.display='block';
+          for (var i = 0; i < me.NdestAuto.length; i++) {
+            me.setupWayptChangedListener(me.NdestAuto[i].auto, me.NdestAuto[i].id);
+          }
+          
+          //me.setupWayptChangedListener(me.NdestAuto[i],id);
+          //me.SetupDeleteListener();
+          
+        });
+       
+      }
+      
+      
+      
+      
+      
+      
+      
+      
+      AutocompleteDirectionsHandler.prototype.SetupDeleteListener = function() {
+        var me = this;
+        var DelButton = document.getElementById("delete0");
+        DelButton.addEventListener('click', function() {
+          me.map.controls[google.maps.ControlPosition.RIGHT_TOP].removeAt(5);
+        })
+        //me.map.controls[google.maps.ControlPosition.RIGHT_TOP].removeAt(5);
+      }
+      function deleteItem(e){
+        var id = e.target.id;
+        var me = this;
+        me.map.controls[google.maps.ControlPosition.RIGHT_TOP].removeAt(id);
+        console.log("delete"+ id);
+      }
+      function add_fields() {
+          
+          var me = this;
+          var objTo = document.getElementById('destinations')
+          var divtest = document.createElement("input");
+          divtest.innerHTML = '<input id="destinat" type="text" placeholder="Enter destination">';
+    
+          objTo.appendChild(divtest)
+          var newdest = document.getElementById('destinat');
+          newdest.bindTo('bounds', me.map);
+          
+}
+
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAjeas9z5fgocWyCoKMJsoxWMrFS3hVGgM&libraries=places&callback=initMap"
+        async defer></script>
+  </body>
+</html>
