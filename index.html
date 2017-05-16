@@ -44,13 +44,24 @@
         border-color: #4d90fe;
       }
 
-      #mode-selector {
+      #mode-selector{
         color: #fff;
         background-color: #4d90fe;
         margin-left: 12px;
         padding: 5px 11px 0px 11px;
       }
-
+      
+      #optim {
+        color: #fff;
+        background-color: #4d90fe;
+        margin-top: 11px;
+        margin-bottom: 5px;
+        padding: 0px 0px 0px 10px;
+        font-size: 13px;
+      }
+      #optimize {
+        color: #fff;
+      }
       #mode-selector label {
         font-family: Roboto;
         font-size: 13px;
@@ -62,7 +73,7 @@
   <body>
     <div id="distance"></div>
     <div id="destinations">
-    <input type="button" id="more_fields" class=controls value="New" />
+    <input type="button" id="more_fields" class=controls value="New waypoint" />
     
     <input id="origin-input" class="controls" type="text"
         placeholder="Enter an origin location" value="Brno, Chechia">
@@ -289,6 +300,11 @@
             durationm = Math.ceil((duration % 3600)/60) ;
             duration = "" + durationh + "h " + durationm + " min"; 
             dist = document.getElementById('distance');
+            var infowindow2 = new google.maps.InfoWindow();
+            var step = 0;
+            infowindow2.setContent(distance +" km" + "<br>" + duration);
+            infowindow2.setPosition(response.routes[0].legs[0].steps[step].end_location);
+            infowindow2.open(me.map);
             //dist.innerHTML = distance;
             //alert(distance);
           } else {
