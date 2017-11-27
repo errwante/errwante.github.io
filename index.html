@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+ 
+
+    <!-- Latest compiled and minified CSS -->
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+
+<!-- Optional theme -->
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp" crossorigin="anonymous">
+
+<!-- Latest compiled and minified JavaScript -->
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+
+    <!-- Just for debugging purposes. Don't actually copy these 2 lines! -->
+    <!--[if lt IE 9]><script src="../../assets/js/ie8-responsive-file-warning.js"></script><![endif]-->
+    <script src="../../assets/js/ie-emulation-modes-warning.js"></script>
+
+    <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
+      <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+    <![endif]-->
+      <style>
+      /* Always set the map height explicitly to define the size of the div
+       * element that contains the map. */
+      #map {
+        height: 100%;
+      }
+      /* Optional: Makes the sample page fill the window. */
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      .controls {
+        margin-top: 10px;
+        border: 1px solid transparent;
+        border-radius: 2px 0 0 2px;
+        box-sizing: border-box;
+        -moz-box-sizing: border-box;
+        height: 32px;
+        outline: none;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      }
+
+      #origin-input,
+      #destination-input {
+        background-color: #fff;
+        font-family: Roboto;
+        font-size: 15px;
+        font-weight: 300;
+        margin-left: 12px;
+        padding: 0 11px 0 13px;
+        text-overflow: ellipsis;
+        width: 200px;
+      }
+
+      #origin-input:focus,
+      #destination-input:focus {
+        border-color: #4d90fe;
+      }
+
+      #mode-selector{
+        margin-left: 4px;
+        margin-top: 10px;
+      }
+      
+      #optim label {
+        margin-top: 10px;
+        
+      }
+      #more_fields {
+        margin-top: 10px;
+      }
+      
+     
+    </style>
+  </head>
+<body>
+ <div id="distance"></div>
+    <div id="destinations">
+    <button id="more_fields" class="btn btn-default" type="submit">New point</button>
+ 
+  <div id="optim" class="btn-group" data-toggle="buttons">
+  <label class="btn btn-info">
+    <input type="checkbox" id="optimize" class="controls" autocomplete="off"> Optimize
+  </label>
+  </div>
+    
+    <!--<input type="button" id="more_fields" class=controls value="New waypoint" />-->
+    
+    <input id="origin-input" class="controls" type="text"
+        placeholder="Enter an origin location" value="Brno, Chechia">
+
+    <input id="destination-input" class="controls" type="text"
+        placeholder="Enter a destination location" value="Prague, Czechia">
+    </div>
+    
+    <div id="mode-selector" class="btn-group" data-toggle='buttons'>
+      <label class="btn btn-info">
+        <input type="checkbox" id="changemode-walking"  autocomplete="off"> Walking
+      </label>
+      <label class="btn btn-info active">
+    <input type="checkbox" id="changemode-driving"  autocomplete="off"> Driving
+  </label>
+      
+      <!--
+      <input type="radio" name="type" id="changemode-walking">
+      <label  class="btn btn-info" for="changemode-walking">Walking</label>
+      
+      <input type="radio" name="type" id="changemode-driving" checked= "checked">
+      <label class="btn btn-info" for="changemode-driving">Driving</label>
+      -->
+      
+    </div>
+    <!--
+    <form id="optim">
+    <input type="checkbox" id="optimize" class=controls value="Optimize">Optimize<br>
+    </form>-->
+    <div id="map"></div>
+
+    <script>
+      // This example requires the Places library. Include the libraries=places
+      // parameter when you first load the API. For example:
+      // <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places">
+
+      function initMap() {
+        var map = new google.maps.Map(document.getElementById('map'), {
+          mapTypeControl: false,
+          center: {lat: -33.8688, lng: 151.2195},
+          zoom: 13
+        });
+
+        new AutocompleteDirectionsHandler(map);
+      }
+
+       /**
+        * @constructor
+       */
+      function AutocompleteDirectionsHandler(map) {
+        this.map = map;
+        this.originPlaceId = null;
+        this.destinationPlaceId = null;
+        this.travelMode = 'DRIVING';
+        this.opt = false;
+        this.NdestAuto = [];
+        this.i = 0;
+        
+        //w = ['Zurich','Munich','Wien','Nurnberg'];
+        this.waypts = [];
+        /*
+        for(var i = 0; i < w.length; i++){
+          this.waypts.push({
+            location: w[i],
+            stopover: true
+          })
+        }
+        */
+        var butn = document.getElementById('more_fields');
+        var optimbutn = document.getElementById('optim');
+        var originInput = document.getElementById('origin-input');
+        var destinationInput = document.getElementById('destination-input');
+        var modeSelector = document.getElementById('mode-selector');
+        //var ndestination = document.getElementById('ndestination');
+        
+        
+        this.directionsService = new google.maps.DirectionsService;
+        this.directionsDisplay = new google.maps.DirectionsRenderer;
+        this.directionsDisplay.setMap(map);
+
+        var originAutocomplete = new google.maps.places.Autocomplete(
+            originInput, {placeIdOnly: true});
+        var destinationAutocomplete = new google.maps.places.Autocomplete(
+            destinationInput, {placeIdOnly: true});
+        //var newdestAuto = new google.maps.places.Autocomplete(ndestination, {placeIdOnly:true});
+        
+
+        this.setupClickListener('changemode-walking', 'WALKING');
+        //this.setupClickListener('changemode-transit', 'TRANSIT');
+        this.setupClickListener('changemode-driving', 'DRIVING');
+
+        this.setupPlaceChangedListener(originAutocomplete, 'ORIG');
+        this.setupPlaceChangedListener(destinationAutocomplete, 'DEST');
+        //this.setupPlaceChangedListener(newdestAuto, 'WAYP');
+        this.setupOptimListener();
+        
+        this.setupNewDestListener('more_fields');
+        
+        this.map.controls[google.maps.ControlPosition.TOP_LEFT].push(originInput);
+        this.map.controls[google.maps.ControlPosition.LEFT_TOP].push(destinationInput);
+        this.map.controls[google.maps.ControlPosition.TOP_LEFT].push(modeSelector);
+        //this.map.controls[google.maps.ControlPosition.TOP_RIGHT].push(ndestination);
+        this.map.controls[google.maps.ControlPosition.TOP_LEFT].push
+          (butn);
+        this.map.controls[google.maps.ControlPosition.TOP_LEFT].push(optimbutn);
+        
+      }
+
+      // Sets a listener on a radio button to change the filter type on Places
+      // Autocomplete.
+      AutocompleteDirectionsHandler.prototype.setupClickListener = function(id, mode) {
+        var radioButton = document.getElementById(id);
+        var me = this;
+        radioButton.addEventListener('click', function() {
+          
+          if(radioButton.checked){
+            radioButton.parentElement.setAttribute("class", "btn btn-info");
+            me.travelMode = mode;
+            //me.route();
+          }
+          else {
+          if(id === 'changemode-driving'){
+            button = document.getElementById('changemode-walking');
+            button.parentElement.setAttribute("class", "btn btn-info");
+          }
+          else {
+            button = document.getElementById('changemode-driving');
+            button.parentElement.setAttribute("class", "btn btn-info");
+          }
+          radioButton.parentElement.setAttribute("class", "btn btn-info active");
+          me.travelMode = mode;
+          me.route();
+          }
+        });
+        
+      };
+      AutocompleteDirectionsHandler.prototype.setupOptimListener = function() {
+        var CheckBox = document.getElementById('optimize');
+        var Lab = document.getElementById('')
+        var me = this;
+        
+        CheckBox.addEventListener('click', function() {
+          if(CheckBox.checked) {
+          //me.map.controls[google.maps.ControlPosition.RIGHT_TOP].removeAt(2);
+          CheckBox.parentElement.setAttribute("class", "btn btn-info active");
+          me.opt = true;
+          me.route();
+          
+          }
+          else {
+            CheckBox.parentElement.setAttribute("class", "btn btn-info");
+            me.opt = false;
+            me.route();
+          }
+        });
+      }
+
+      AutocompleteDirectionsHandler.prototype.setupPlaceChangedListener = function(autocomplete, mode) {
+        var me = this;
+        autocomplete.bindTo('bounds', this.map);
+        autocomplete.addListener('place_changed', function() {
+          var place = autocomplete.getPlace();
+          if (!place.place_id) {
+            window.alert("Please select an option from the dropdown list.");
+            return;
+          }
+          if (mode === 'ORIG') {
+            me.originPlaceId = place.place_id;
+          } 
+          else if(mode ==='WAYP') {
+            me.waypts.push({
+              location: place.name,
+              stopover: true
+            })
+          }
+          else {
+            me.destinationPlaceId = place.place_id;
+          }
+          me.route();
+        });
+
+      };
+      
+      AutocompleteDirectionsHandler.prototype.setupWayptChangedListener = function(autocomplete, id) {
+        var me = this;
+        autocomplete.bindTo('bounds', this.map);
+        autocomplete.addListener('place_changed', function() {
+          var place = autocomplete.getPlace();
+          if (!place.place_id) {
+            window.alert("Please select an option from the dropdown list.");
+            return;
+          }
+          if(me.waypts.length == 0) {
+              me.waypts.push({
+                location: place.name,
+                id: id
+              });
+          }
+          
+          var flag = true;
+          for (var i = 0; i < me.waypts.length; i++) {
+           
+            if(me.waypts[i].id == id) {
+            me.waypts[i].location = place.name;
+            flag = false;
+            break;
+            }
+          }
+          if(flag) {
+          me.waypts.push({
+              location: place.name,
+              id: id
+            });
+          }
+          me.route();
+          
+        });
+        
+      };
+
+      AutocompleteDirectionsHandler.prototype.route = function() {
+        if (!this.originPlaceId || !this.destinationPlaceId) {
+          return;
+        }
+        var me = this;
+        var wayp = [];
+        
+        for(var i = 0; i < me.waypts.length; i++) {
+          wayp.push({
+            location: me.waypts[i].location,
+            stopover: true
+          });
+        }
+        
+        this.directionsService.route({
+          origin: {'placeId': this.originPlaceId},
+          destination: {'placeId': this.destinationPlaceId},
+          travelMode: this.travelMode,
+          waypoints: wayp,
+          optimizeWaypoints: this.opt
+        }, function(response, status) {
+          if (status === 'OK') {
+            me.directionsDisplay.setDirections(response);
+            var route = response.routes[0];
+            var distance = 0;
+            var duration = 0;
+            for (var i = 0; i < route.legs.length; i++){
+              distance += route.legs[i].distance.value;
+              duration += route.legs[i].duration.value;
+              
+            }
+            distance = Math.ceil(distance/1000)*0.62;
+            durationh = Math.floor(duration/3600);
+            durationm = Math.ceil((duration % 3600)/60) ;
+            duration = "" + durationh + "h " + durationm + " min"; 
+            dist = document.getElementById('distance');
+            var infowindow2 = new google.maps.InfoWindow();
+            var step = 0;
+            infowindow2.setContent(distance +" km" + "<br>" + duration);
+            infowindow2.setPosition(response.routes[0].legs[0].steps[step].end_location);
+            infowindow2.open(me.map);
+            //dist.innerHTML = distance;
+            //alert(distance);
+          } else {
+            window.alert('Directions request failed due to ' + status);
+          }
+        });
+      };
+      AutocompleteDirectionsHandler.prototype.setupNewDestListener = function(id) {
+        //room++;
+        var me = this;
+        var NewButton = document.getElementById(id);
+        NewButton.addEventListener('click', function() {
+          //document.getElementById("ndestination").style.display = 'block';
+          var objTo = document.getElementById('destinations');
+          var elem = document.querySelectorAll('[id^="waypt"]');
+          //objTo.style.display = 'block';
+          var divtest = document.createElement('div');
+          
+          //var str = '<input id="destinat%s" type="text" placeholder="Enter destination">';
+          //divtest.index=1;
+          //str = str.replace('%s',room)
+          //var i = elem.length;
+          var id = (new Date()).getTime();
+          divtest.innerHTML = '<input type="text" class="controls" placeholder="Enter destination"/>';
+          divtest.setAttribute("id", "waypt" + id);
+          //divtest.setAttribute("id", "destinat" + objTo.children.length);
+          //divtest.index = 1;
+          var SpanDelete = document.createElement('span');
+          SpanDelete.innerHTML =  "&nbsp;&#10007;&nbsp;";
+          SpanDelete.setAttribute("id", id);
+          SpanDelete.setAttribute("class", "delete");
+          //SpanDelete.onclick = deleteItem;
+          divtest.appendChild(SpanDelete);
+          objTo.appendChild(divtest);
+          //NdestAuto = [];
+          SpanDelete.addEventListener('click', function() {
+            
+            //alert(divtest.index);
+            var nspans = me.waypts.length;
+            
+            for (var i = 0; i < me.waypts.length; i++) {
+            
+              if(me.waypts[i].id == SpanDelete.id){
+                me.waypts.splice(i,1);
+                break;
+              }
+              
+            }
+            //fix this
+            for (var i = 0; i < nspans+1; i++){
+              var loccontrol = me.map.controls[google.maps.ControlPosition.LEFT_CENTER].getAt(i);
+              //console.log(loccontrol);
+              if ((loccontrol.getElementsByClassName("delete")[0].id)==SpanDelete.id){
+                  me.map.controls[google.maps.ControlPosition.LEFT_CENTER].removeAt(i);
+                  break;
+                }
+              
+            }
+            me.route();
+          })
+          var newdest = document.getElementById('waypt'+ id);
+          
+          me.NdestAuto.push({
+            auto: new google.maps.places.Autocomplete(newdest.children[0], {placeIdOnly: true}),
+            id: id
+            }
+            );
+          me.map.controls[google.maps.ControlPosition.LEFT_CENTER].push(newdest);
+          //document.getElementById('destinat').style.display='block';
+          for (var i = 0; i < me.NdestAuto.length; i++) {
+            me.setupWayptChangedListener(me.NdestAuto[i].auto, me.NdestAuto[i].id);
+          }
+          
+          //me.setupWayptChangedListener(me.NdestAuto[i],id);
+          //me.SetupDeleteListener();
+          
+        });
+       
+      }
+      
+      
+      
+      
+      
+      
+      
+      
+      AutocompleteDirectionsHandler.prototype.SetupDeleteListener = function() {
+        var me = this;
+        var DelButton = document.getElementById("delete0");
+        DelButton.addEventListener('click', function() {
+          me.map.controls[google.maps.ControlPosition.RIGHT_TOP].removeAt(5);
+        })
+        //me.map.controls[google.maps.ControlPosition.RIGHT_TOP].removeAt(5);
+      }
+      function deleteItem(e){
+        var id = e.target.id;
+        var me = this;
+        me.map.controls[google.maps.ControlPosition.RIGHT_TOP].removeAt(id);
+        console.log("delete"+ id);
+      }
+      function add_fields() {
+          
+          var me = this;
+          var objTo = document.getElementById('destinations')
+          var divtest = document.createElement("input");
+          divtest.innerHTML = '<input id="destinat" type="text" placeholder="Enter destination">';
+    
+          objTo.appendChild(divtest)
+          var newdest = document.getElementById('destinat');
+          newdest.bindTo('bounds', me.map);
+          
+}
+
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAjeas9z5fgocWyCoKMJsoxWMrFS3hVGgM&libraries=places&callback=initMap"
+        async defer></script>
+    <script src="js/bootstrap-switch/highlight.js"></script>
+    <script src="js/bootstrap-switch/bootstrap-switch.js"></script>
+    <script src="js/bootstrap-switch/main.js"></script>
+    <!-- Bootstrap core JavaScript
+    ================================================== -->
+    <!-- Placed at the end of the document so the pages load faster -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script>window.jQuery || document.write('<script src="../../assets/js/vendor/jquery.min.js"><\/script>')</script>
+    <script src="../../dist/js/bootstrap.min.js"></script>
+    <!-- IE10 viewport hack for Surface/desktop Windows 8 bug -->
+    <script src="../../assets/js/ie10-viewport-bug-workaround.js"></script>
+  </body>
+</html>
